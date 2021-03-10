@@ -14,6 +14,7 @@
 #include "RigidBody/GeneralizedVelocity.h"
 #include "RigidBody/GeneralizedAcceleration.h"
 #include "RigidBody/GeneralizedTorque.h"
+#include "RigidBody/IMU.h"
 %}
 
 %include "@CMAKE_CURRENT_SOURCE_DIR@/numpy.i"
@@ -982,6 +983,30 @@ biorbd::rigidbody::GeneralizedAcceleration * {
     }
 #endif
 };
+%extend biorbd::rigidbody::IMU{
+#ifdef BIORBD_USE_CASADI_MATH
+    casadi::MX to_mx(){
+        return *dynamic_cast<casadi::MX*>($self);
+    };
+#else
+    PyObject* to_array(){
+        int nArraySize(2);
+        npy_intp * arraySizes = new npy_intp[nArraySize];
+        arraySizes[0] = 4;
+        arraySizes[1] = 4;
+
+        double * values = new double[4*4];
+        for (unsigned int i=0; i<4; ++i){
+            for (unsigned int j=0; j<4; ++j){
+                values[i*4+j] = (*$self)(j*4+i);
+            }
+        }
+        PyObject* output = PyArray_SimpleNewFromData(nArraySize,arraySizes,NPY_DOUBLE, values);
+        PyArray_ENABLEFLAGS((PyArrayObject *)output, NPY_ARRAY_OWNDATA);
+        return output;
+    }
+#endif
+};
 
 %extend biorbd::utils::Rotation{
 #ifdef BIORBD_USE_CASADI_MATH
@@ -1007,35 +1032,6 @@ biorbd::rigidbody::GeneralizedAcceleration * {
     }
 #endif
 };
-
-%typemap(typecheck, precedence=3000)
-std::vector<std::shared_ptr<biorbd::muscles::State>> &
-{
-    void *argp1 = 0;
-    if (SWIG_IsOK(SWIG_ConvertPtr($input, &argp1,
-            SWIGTYPE_p_std__vectorT_biorbd__muscles__State_std__allocatorT_biorbd__muscles__State_t_t,  0  | 0)) && argp1) {
-      // Test if it is a pointer to String already exists
-      $1 = true;
-    } else {
-      $1 = false;
-    }
-
-}
-%typemap(in) std::vector<std::shared_ptr<biorbd::muscles::State>> &{
-    void * argp1 = 0;
-    if (SWIG_IsOK(SWIG_ConvertPtr($input, &argp1,
-            SWIGTYPE_p_std__vectorT_biorbd__muscles__State_std__allocatorT_biorbd__muscles__State_t_t,  0  | 0)) && argp1) {
-
-        std::vector<biorbd::muscles::State>* tp = reinterpret_cast<std::vector<biorbd::muscles::State>*>(argp1);
-        $1 = new std::vector<std::shared_ptr<biorbd::muscles::State>>;
-        for (unsigned int i=0; i<tp->size(); ++i)
-            (*$1).push_back(std::make_shared<biorbd::muscles::State>((*tp)[i]));
-
-    } else {
-        PyErr_SetString(PyExc_ValueError, "Unknown error when casting State");
-        SWIG_fail;
-    }
-}
 
 // Import the main swig interface
 %include @CMAKE_CURRENT_BINARY_DIR@/../biorbd.i
